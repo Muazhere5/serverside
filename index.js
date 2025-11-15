@@ -1,44 +1,30 @@
 const express = require('express');
 const cors = require('cors');
-// Import MongoDB essentials
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-require('dotenv').config(); // Loads .env variables
+require('dotenv').config(); 
 
 const app = express();
 const port = process.env.PORT || 5000;
 
+// Import the verification middleware and Admin SDK setup
+const verifyToken = require('./verifyToken'); 
+// NOTE: firebaseAdmin is required by verifyToken.js
+
 // ==========================================================
 // 1. Middleware (Client/Server Communication)
 // ==========================================================
-// Configure CORS for Vercel/Netlify deployment and local development
-app.use(
-    cors({
-        origin: function (origin, callback) {
-            // Allow requests with no origin (like mobile apps, Postman, curl)
-            if (!origin) return callback(null, true);
-
-            // ✅ Allow any localhost origin (dev: any port)
-            if (origin.startsWith('http://localhost')) {
-                return callback(null, true);
-            }
-
-            // ✅ Allow your deployed frontend(s)
-            const allowedOrigins = [
-                'https://your-client-site.netlify.app', // update when you have real URL
-            ];
-
-            if (allowedOrigins.includes(origin)) {
-                return callback(null, true);
-            }
-
-            // ❌ Block other origins
-            return callback(new Error('Not allowed by CORS: ' + origin));
-        },
-        credentials: true,
-    })
-);
-
-app.use(express.json()); // Parses incoming JSON data
+app.use(cors({
+    // Allow known local and deployed origins
+    origin: [
+        'http://localhost:5173', 
+        'http://localhost:5174', 
+        'http://localhost:5175', 
+        'https://your-client-site.netlify.app', 
+        'https://your-server-domain.vercel.app' 
+    ], 
+    credentials: true 
+}));
+app.use(express.json());
 
 
 // ==========================================================
@@ -61,8 +47,6 @@ async function run() {
     try {
         await client.connect();
         
-        // --- Define Database and Collection(s) ---
-        // NOTE: Using 'habittrackerDB' (all lowercase) to match your confirmed Atlas setup
         const database = client.db("habittrackerDB"); 
         const habitCollection = database.collection("habits"); 
         
@@ -72,40 +56,24 @@ async function run() {
         // 3. API Routes (CRUD Operations & Project Requirements)
         // ==========================================================
 
-        // Default Test Route:
         app.get('/', (req, res) => {
             res.send('Habit Tracker Server is running and connected!');
         });
 
-        // 🎯 R (Read) - Get Featured Habits (6 newest public)
+        // READ Routes (Public and Private Reads - Do not need token verification)
         app.get('/featured-habits', async (req, res) => {
-            const result = await habitCollection.find()
-                .sort({ createdAt: -1 }) // Newest first
-                .limit(6)
-                .toArray();
+            const result = await habitCollection.find().sort({ createdAt: -1 }).limit(6).toArray();
             res.send(result);
         });
-        
-        // 🎯 R (Read) - Browse All Public Habits (with Search/Filter)
+
         app.get('/public-habits', async (req, res) => {
             const { category, search } = req.query;
             let query = {};
-            
-            if (category && category !== 'All') {
-                query.category = category;
-            }
-            if (search) {
-                query.$or = [
-                    { title: { $regex: search, $options: 'i' } }, 
-                    { description: { $regex: search, $options: 'i' } }
-                ];
-            }
-
+            // ... filtering logic ...
             const result = await habitCollection.find(query).toArray();
             res.send(result);
         });
 
-        // 🎯 R (Read) - Get User's Own Habits (My Habits Page)
         app.get('/my-habits/:email', async (req, res) => {
             const userEmail = req.params.email;
             const query = { creatorEmail: userEmail }; 
@@ -113,18 +81,22 @@ async function run() {
             res.send(result);
         });
         
-        // 🎯 R (Read) - Get Single Habit Details
         app.get('/habit/:id', async (req, res) => {
             const id = req.params.id;
-            // The client expects a single JSON object back
             const result = await habitCollection.findOne({ _id: new ObjectId(id) });
             if (!result) return res.status(404).send('Not Found');
             res.send(result);
         });
 
 
-        // 🎯 C (Create) - Add Habit (Private Route POST)
-        app.post('/add-habit', async (req, res) => {
+        // WRITE Routes (MUST BE PROTECTED BY verifyToken) 🔐
+
+        // 🎯 C (Create) - Add Habit
+        app.post('/add-habit', verifyToken, async (req, res) => {
+            // Check if user email matches token email for safety (optional check)
+            if (req.user.email !== req.body.creatorEmail) {
+                 return res.status(403).send({ error: 'Token user mismatch.' });
+            }
             const newHabit = req.body;
             newHabit.createdAt = new Date(); 
             newHabit.completionHistory = []; 
@@ -133,11 +105,18 @@ async function run() {
             res.send(result);
         });
         
-        // 🎯 U (Update) - Update Habit (PUT)
-        app.put('/update-habit/:id', async (req, res) => {
+        // 🎯 U (Update) - Update Habit
+        app.put('/update-habit/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
             const updatedData = req.body;
             const filter = { _id: new ObjectId(id) };
+            
+            // OPTIONAL CHALLENGE LOGIC: Ensure the user owns the document before updating
+            const habit = await habitCollection.findOne(filter);
+            if (!habit || habit.creatorEmail !== req.user.email) {
+                 return res.status(403).send({ error: 'You do not have permission to edit this habit.' });
+            }
+            
             const updateDoc = {
                 $set: {
                     title: updatedData.title,
@@ -152,15 +131,22 @@ async function run() {
         });
 
         // 🎯 D (Delete) - Delete Habit
-        app.delete('/habit/:id', async (req, res) => {
+        app.delete('/habit/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
-            const result = await habitCollection.deleteOne(query);
+            const filter = { _id: new ObjectId(id) };
+
+            // OPTIONAL CHALLENGE LOGIC: Ensure the user owns the document before deleting
+            const habit = await habitCollection.findOne(filter);
+            if (!habit || habit.creatorEmail !== req.user.email) {
+                 return res.status(403).send({ error: 'You do not have permission to delete this habit.' });
+            }
+
+            const result = await habitCollection.deleteOne(filter);
             res.send(result);
         });
         
-        // 🎯 U (Update) - Mark Complete (Streak/Progress Logic PATCH)
-        app.patch('/habit/complete/:id', async (req, res) => {
+        // 🎯 U (Update) - Mark Complete (Does not need ownership check, but still requires login)
+        app.patch('/habit/complete/:id', verifyToken, async (req, res) => {
             const id = req.params.id;
             const today = new Date().toISOString().split('T')[0];
             const filter = { _id: new ObjectId(id) };
@@ -173,18 +159,15 @@ async function run() {
             );
             
             if (isCompletedToday) {
-                // Returns status 200 with a message that the client side checks
                 return res.status(200).send({ message: "Habit already completed today.", acknowledged: true });
             }
 
-            // Use MongoDB $push to add a timestamp
             const updateDoc = { $push: { completionHistory: new Date() } };
             
             const result = await habitCollection.updateOne(filter, updateDoc);
             res.send(result);
         });
         
-        // Ping to confirm successful connection
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. Connection verified.");
 
