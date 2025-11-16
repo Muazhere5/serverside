@@ -8,22 +8,6 @@
   ],
   "routes": [
     {
-      "src": "/featured-habits",
-      "dest": "index.js"
-    },
-    {
-      "src": "/my-habits/(.*)",
-      "dest": "index.js"
-    },
-    {
-      "src": "/add-habit",
-      "dest": "index.js"
-    },
-    {
-      "src": "/habit/(.*)",
-      "dest": "index.js"
-    },
-    {
       "src": "/(.*)",
       "dest": "index.js"
     }
