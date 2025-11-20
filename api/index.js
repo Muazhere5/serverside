@@ -13,7 +13,7 @@ app.use(cors({
     'http://localhost:5174',
     'http://localhost:5175',
     'https://your-client-site.netlify.app',
-    'https://serverside-xi.vercel.app'
+    'https://serverside-94r978mcz-muaz-heres-projects.vercel.app'
   ],
   credentials: true
 }));
