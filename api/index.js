@@ -13,7 +13,7 @@ app.use(cors({
     'http://localhost:5174',
     'http://localhost:5175',
     'https://your-client-site.netlify.app',
-    'https://serverside-habit-tracker.vercel.app'
+    'https://serverside-habit-tracker.vercel.app' // <- this should be your FRONTEND url in production
   ],
   credentials: true
 }));
@@ -218,13 +218,13 @@ app.patch('/habit/complete/:id', verifyToken, async (req, res) => {
 });
 
 
-// ⬇️⬇️ NEW: local dev server listener (for npm run dev)
-if (require.main === module) {
-  const port = process.env.PORT || 5000;
-  app.listen(port, () => {
-    console.log(`🚀 Habit Tracker server listening on port ${port}`);
-  });
-}
+// ⬇️⬇️ LOCAL DEV SERVER LISTENER (COMMENTED OUT FOR SERVERLESS ONLY)
+// if (require.main === module) {
+//   const port = process.env.PORT || 5000;
+//   app.listen(port, () => {
+//     console.log(`🚀 Habit Tracker server listening on port ${port}`);
+//   });
+// }
 
 // Export handler for Vercel
 module.exports = async (req, res) => {
