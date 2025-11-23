@@ -5,15 +5,11 @@ if (!global.__firebaseAdmin) {
   global.__firebaseAdmin = {};
 }
 
-/**
- * FINAL FIX:
- * Only convert escaped \n into actual newlines.
- * Do NOT decode base64, do NOT trim, do NOT remove quotes.
- */
+
 function normalizeKey(raw) {
   if (!raw) throw new Error('Missing FIREBASE_PRIVATE_KEY');
 
-  // Convert escaped newline characters into real line breaks
+  
   return raw.replace(/\\n/g, '\n');
 }
 

@@ -1,10 +1,9 @@
-// api/index.js
+
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const verifyToken = require('../verifyToken'); // uses firebaseAdmin internally
+const verifyToken = require('../verifyToken'); 
 
-// create express app and define routes synchronously
 const app = express();
 
 app.use(cors({
@@ -13,18 +12,18 @@ app.use(cors({
     'http://localhost:5174',
     'http://localhost:5175',
     'https://your-client-site.netlify.app',
-    'https://serverside-habit-tracker.vercel.app' // <- this should be your FRONTEND url in production
+    'https://serverside-habit-tracker.vercel.app' 
   ],
   credentials: true
 }));
 app.use(express.json());
 
-// Default public route (works without DB)
+
 app.get('/', (req, res) => {
   res.send('Habit Tracker Server is running and connected!');
 });
 
-// Mongo connection helpers for serverless
+
 const MONGO_URI = process.env.MONGODB_URI || (() => {
   const user = process.env.DB_USER || '';
   const pass = process.env.DB_PASS || '';
@@ -45,7 +44,7 @@ async function getDb() {
   if (!global._mongo.connecting) {
     const client = new MongoClient(MONGO_URI, {
       serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
-      // increase serverSelectionTimeoutMS if needed
+      
       serverSelectionTimeoutMS: 10000
     });
     global._mongo.connecting = client.connect()
@@ -64,7 +63,7 @@ async function getDb() {
   return global._mongo.connecting;
 }
 
-// Register all routes that require DB inside functions that call getDb() lazily
+
 
 app.get('/featured-habits', async (req, res) => {
   try {
@@ -126,7 +125,7 @@ app.get('/habit/:id', async (req, res) => {
   }
 });
 
-// PROTECTED ROUTES
+
 
 app.post('/add-habit', verifyToken, async (req, res) => {
   try {
@@ -218,21 +217,14 @@ app.patch('/habit/complete/:id', verifyToken, async (req, res) => {
 });
 
 
-// ⬇️⬇️ LOCAL DEV SERVER LISTENER (COMMENTED OUT FOR SERVERLESS ONLY)
-// if (require.main === module) {
-//   const port = process.env.PORT || 5000;
-//   app.listen(port, () => {
-//     console.log(`🚀 Habit Tracker server listening on port ${port}`);
-//   });
-// }
 
-// Export handler for Vercel
+
 module.exports = async (req, res) => {
   try {
-    // Ensure DB connection is ready before handling request
+    
     if (MONGO_URI) await getDb();
   } catch (err) {
-    // If DB fails, still allow GET / (health) to respond; otherwise return 500
+    
     if (req.url === '/' || req.url === '') {
       return app(req, res);
     }
